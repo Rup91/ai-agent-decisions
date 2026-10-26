@@ -1,0 +1,8 @@
+streamlit
+pandas
+python-dotenv
+google-genai
+groq
+pypdf
+python-docx
+qdrant-client

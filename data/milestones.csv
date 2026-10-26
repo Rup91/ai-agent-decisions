@@ -1,0 +1,16 @@
+﻿milestone_id,project_id,milestone_name,baseline_date,forecast_date,status,owner_role,risk_status,dependency_or_comment
+MS-101,PRJ-101,Identity integration complete,2026-10-16,2026-10-30,In Progress,Platform Lead,AMBER,Identity-provider defects remain open
+MS-102,PRJ-101,UAT exit,2026-11-13,2026-11-20,Not Started,QA Lead,AMBER,UAT start depends on stable identity integration
+MS-103,PRJ-101,Production release,2026-12-18,2027-01-08,Not Started,Release Manager,AMBER,Forecast moved due to integration and UAT pressure
+MS-201,PRJ-102,Data cleansing complete,2026-10-09,2026-10-30,Delayed,Data Quality Lead,RED,Customer identifiers are inconsistent across source systems
+MS-202,PRJ-102,Migration rehearsal,2026-10-30,2026-11-13,Not Started,Migration Lead,RED,Depends on cleansing completion and reconciliation
+MS-203,PRJ-102,Critical-data reconciliation sign-off,2026-11-06,2026-11-20,Not Started,Data Owner,RED,Formal sign-off cannot occur until exception rate is within threshold
+MS-301,PRJ-103,Upstream evidence received,2026-10-23,2026-10-30,In Progress,Compliance Analyst,AMBER,Evidence from two upstream systems is incomplete
+MS-302,PRJ-103,Regulatory control validation,2026-11-13,2026-11-13,Not Started,Controls Lead,AMBER,Validation needs complete evidence pack
+MS-303,PRJ-103,Business acceptance,2026-11-27,2026-11-27,Not Started,Product Owner,GREEN,No current schedule variance; monitor evidence dependencies
+MS-401,PRJ-104,Security baseline sign-off,2026-10-23,2026-11-06,In Progress,Security Architect,AMBER,Approval is awaiting final review
+MS-402,PRJ-104,Production landing-zone readiness,2026-11-27,2026-11-27,Not Started,Cloud Platform Lead,AMBER,Depends on security baseline approval
+MS-403,PRJ-104,First workload migration,2026-12-11,2026-12-11,Not Started,Migration Lead,GREEN,Proceed after readiness checks pass
+MS-501,PRJ-105,Partner API contract agreed,2026-10-16,2026-10-30,Delayed,Integration Lead,RED,Partner contract changes are not agreed
+MS-502,PRJ-105,End-to-end integration test complete,2026-11-06,2026-11-20,Not Started,Test Lead,RED,Dependent on approved API contract and stable test environment
+MS-503,PRJ-105,Business acceptance,2026-11-20,2026-12-04,Not Started,Business Owner,AMBER,Forecast affected by integration test delay
