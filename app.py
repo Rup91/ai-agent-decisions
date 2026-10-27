@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+from io import BytesIO
+import re
+import html
 
 st.set_page_config(
     page_title="Project Intelligence | The Learning Forge",
@@ -10,6 +13,132 @@ st.set_page_config(
 )
 
 DATA_DIR = Path(__file__).parent / "data"
+
+
+def build_agent_pdf(goal: str, report: str, tool_log: list) -> bytes:
+    """Create a polished PDF executive report in memory using ReportLab."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        HRFlowable, KeepTogether
+    )
+
+    buffer = BytesIO()
+    navy = colors.HexColor("#0B1020")
+    blue = colors.HexColor("#315FEA")
+    muted = colors.HexColor("#526079")
+    pale = colors.HexColor("#EEF3FF")
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="ReportTitle", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=23, leading=28, textColor=navy, alignment=TA_LEFT,
+        spaceAfter=5 * mm
+    ))
+    styles.add(ParagraphStyle(
+        name="ReportSubtitle", parent=styles["Normal"], fontSize=9,
+        leading=13, textColor=muted, spaceAfter=2 * mm
+    ))
+    styles.add(ParagraphStyle(
+        name="SectionHeading", parent=styles["Heading2"], fontName="Helvetica-Bold",
+        fontSize=13, leading=16, textColor=blue, spaceBefore=5 * mm, spaceAfter=2 * mm
+    ))
+    styles.add(ParagraphStyle(
+        name="ReportBody", parent=styles["BodyText"], fontName="Helvetica",
+        fontSize=9, leading=13, textColor=colors.HexColor("#202B40"),
+        spaceAfter=2.2 * mm, wordWrap="CJK"
+    ))
+    styles.add(ParagraphStyle(
+        name="SmallMeta", parent=styles["Normal"], fontSize=8,
+        leading=11, textColor=muted
+    ))
+
+    def clean_markup(text: str) -> str:
+        text = html.escape(text, quote=False)
+        text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+        text = re.sub(r"`([^`]+)`", r"<font name='Courier'>\1</font>", text)
+        return text.replace("  ", " ")
+
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=19*mm, leftMargin=19*mm,
+        topMargin=18*mm, bottomMargin=18*mm,
+        title="Project Intelligence — Executive Report",
+        author="The Learning Forge | Project Intelligence Platform"
+    )
+    story = [
+        Paragraph("PROJECT INTELLIGENCE", styles["ReportSubtitle"]),
+        Paragraph("Executive Investigation Report", styles["ReportTitle"]),
+        HRFlowable(width="100%", thickness=1.5, color=blue, spaceAfter=5*mm),
+        Paragraph("<b>Business goal</b>", styles["ReportBody"]),
+        Paragraph(clean_markup(goal), styles["ReportBody"]),
+        Spacer(1, 2*mm),
+        Paragraph("Prepared by the AI Agent · Evidence-led analysis · For human review", styles["ReportSubtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#D7DEEC"), spaceBefore=2*mm, spaceAfter=3*mm),
+    ]
+
+    # Format headings, bullets, and ordinary paragraphs from the Markdown report.
+    in_table = False
+    for raw_line in (report or "No report content was returned.").splitlines():
+        line = raw_line.strip()
+        if not line:
+            story.append(Spacer(1, 1.5*mm))
+            continue
+        if line.startswith("|"):
+            # Keep Markdown table rows readable as compact text rather than overflowing a PDF table.
+            if set(line.replace("|", "").replace("-", "").replace(":", "").strip()) == set():
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            cell_text = "  •  ".join(c for c in cells if c)
+            story.append(Paragraph(clean_markup(cell_text), styles["ReportBody"]))
+            continue
+        heading_match = re.match(r"^#{1,4}\s+(.*)", line)
+        if heading_match:
+            story.append(Paragraph(clean_markup(heading_match.group(1)), styles["SectionHeading"]))
+        elif line.startswith(("- ", "* ", "• ")):
+            bullet_text = line[2:].strip() if line[:2] in ("- ", "* ") else line[2:].strip()
+            story.append(Paragraph("&#8226;&nbsp;&nbsp;" + clean_markup(bullet_text), styles["ReportBody"]))
+        else:
+            story.append(Paragraph(clean_markup(line), styles["ReportBody"]))
+
+    if tool_log:
+        story.extend([Spacer(1, 4*mm), Paragraph("Investigation Activity", styles["SectionHeading"])])
+        rows = [["Tool", "Search / input", "Result"]]
+        for item in tool_log:
+            rows.append([
+                str(item.get("tool", "")),
+                str(item.get("query", "") or "—"),
+                str(item.get("result_status", "")),
+            ])
+        safe_rows = [[Paragraph(html.escape(str(cell)), styles["SmallMeta"]) for cell in row] for row in rows]
+        table = Table(safe_rows, colWidths=[43*mm, 91*mm, 27*mm], repeatRows=1, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), navy),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("BACKGROUND", (0,1), (-1,-1), colors.white),
+            ("GRID", (0,0), (-1,-1), 0.4, colors.HexColor("#D7DEEC")),
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("LEFTPADDING", (0,0), (-1,-1), 6),
+            ("RIGHTPADDING", (0,0), (-1,-1), 6),
+            ("TOPPADDING", (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ]))
+        story.append(table)
+
+    def footer(canvas, document):
+        canvas.saveState()
+        canvas.setStrokeColor(colors.HexColor("#D7DEEC"))
+        canvas.line(19*mm, 13*mm, A4[0]-19*mm, 13*mm)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(muted)
+        canvas.drawString(19*mm, 8*mm, "THE LEARNING FORGE · PROJECT INTELLIGENCE")
+        canvas.drawRightString(A4[0]-19*mm, 8*mm, f"Page {document.page}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buffer.getvalue()
 
 st.markdown("""
 <style>
@@ -193,6 +322,15 @@ div[data-testid="stDataFrame"] {
 hr {
     border-color: #2A3651;
 }
+
+.agent-result-banner {
+    background: linear-gradient(120deg, rgba(34,197,94,.13), rgba(82,139,255,.12));
+    border: 1px solid #36516D; border-radius: 16px; padding: 18px 20px;
+    margin: 12px 0 18px 0;
+}
+.agent-result-eyebrow { color: #9FC0FF; font-size: 10px; font-weight: 800; letter-spacing: 1.8px; }
+.agent-result-title { color: #FFFFFF; font-size: 23px; font-weight: 800; margin-top: 5px; }
+.agent-result-copy { color: #C1CBE0; font-size: 13px; margin-top: 5px; }
 
 .footer {
     color: #7E8EAE;
@@ -614,30 +752,106 @@ with chatbot_tab:
 with agent_tab:
     st.markdown("### AI Agent Workspace")
     st.write(
-        "Give the agent a business goal to investigate. "
-        "It will eventually use approved tools to prepare a report."
+        "Set a business goal. The agent can inspect structured project data, "
+        "search indexed documents, cross-check evidence, and prepare an executive report."
     )
 
     with st.container(border=True):
         st.text_area(
             "Business goal",
             placeholder=(
-                "Prepare an executive report and identify "
-                "the decisions required."
+                "Investigate migration delays, cross-check risks against "
+                "milestone dates and architecture documents, identify evidence "
+                "gaps, and recommend management actions."
             ),
             height=120,
             key="agent_goal",
         )
-
         st.caption(
-            "Human approval will be required before consequential actions."
+            "Read-only investigation. Recommendations are for human review; "
+            "the agent does not execute management actions."
         )
+        if st.button("◈  Start Investigation", type="primary", key="start_agent"):
+            goal = st.session_state.get("agent_goal", "").strip()
+            if not goal:
+                st.warning("Please enter a business goal first.")
+            else:
+                try:
+                    from modules.agent import run_agent
+                    with st.spinner("Investigating project data and indexed documents..."):
+                        result = run_agent(goal)
+                    st.session_state["agent_last_result"] = result
+                    st.session_state["agent_last_goal"] = goal
+                except Exception as e:
+                    st.session_state["agent_last_result"] = {
+                        "report": f"Agent execution failed: {type(e).__name__}: {e}",
+                        "tool_log": [],
+                        "status": "error",
+                    }
+                    st.session_state["agent_last_goal"] = goal
 
-        if st.button("◈  Start Agent", type="primary",
-                     key="start_agent"):
-            st.info(
-                "Agent workspace is ready. "
-                "Tool execution and AI reasoning will be implemented next."
+    # Keep the report visible after Streamlit reruns (e.g. when downloading the PDF).
+    result = st.session_state.get("agent_last_result")
+    if result:
+        report = result.get("report", "") or "No report was returned."
+        tool_log = result.get("tool_log", []) or []
+        status = result.get("status", "unknown")
+        goal = st.session_state.get("agent_last_goal", "")
+
+        st.markdown(
+            "<div class='agent-result-banner'>"
+            "<div class='agent-result-eyebrow'>THE LEARNING FORGE / INVESTIGATION COMPLETE</div>"
+            "<div class='agent-result-title'>Executive Investigation Report</div>"
+            "<div class='agent-result-copy'>Findings, evidence, risks and proposed management actions</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Run status", "Completed" if status == "success" else "Needs review")
+        c2.metric("Tool calls", len(tool_log))
+        c3.metric("Distinct tools", len({item.get("tool") for item in tool_log if item.get("tool")}))
+
+        if status == "success":
+            st.success("Investigation report generated. Review the evidence and recommendations before acting.")
+        else:
+            st.warning("The investigation did not complete successfully. Review the message below and technical details if needed.")
+
+        with st.container(border=True):
+            st.markdown(report)
+
+        col_pdf, col_tools = st.columns([1, 2])
+        with col_pdf:
+            try:
+                pdf_bytes = build_agent_pdf(goal, report, tool_log)
+                st.download_button(
+                    "⬇ Download Executive Report (PDF)",
+                    data=pdf_bytes,
+                    file_name="project_intelligence_executive_report.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    key="download_agent_pdf",
+                    use_container_width=True,
+                )
+            except ImportError:
+                st.warning("PDF export requires ReportLab. Install it with: pip install reportlab")
+            except Exception as e:
+                st.error("Could not prepare the PDF export.")
+                with st.expander("PDF technical details"):
+                    st.code(str(e))
+        with col_tools:
+            if tool_log:
+                with st.expander("View investigation activity / tool calls"):
+                    st.dataframe(
+                        pd.DataFrame(tool_log),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+        if status != "success":
+            with st.expander("Agent technical details"):
+                st.code(report)
+            st.caption(
+                "If this is a token-rate-limit error, wait before retrying and use a focused goal."
             )
 
 with st.expander("View source project data"):
